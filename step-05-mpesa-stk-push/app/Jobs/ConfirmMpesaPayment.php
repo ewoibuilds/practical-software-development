@@ -7,22 +7,15 @@ use App\Services\Mpesa;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class ConfirmMpesaPayment implements ShouldQueue
 {
     use Queueable;
 
-    /** The only result codes treated as a final "not paid". Any other code is retried, never guessed. */
-    public const FINAL_FAILURES = [
-        1 => 'failed',
-        1032 => 'cancelled',
-        1019 => 'failed',
-        1025 => 'failed',
-        1037 => 'failed',
-        2001 => 'failed',
-        9999 => 'failed',
-    ];
+    /** The only failure code Daraja documents: "Request cancelled by user" (Daraja, M-Pesa Express Query). */
+    public const CANCELLED = 1032;
 
     public int $tries = 5;
 
@@ -44,9 +37,13 @@ class ConfirmMpesaPayment implements ShouldQueue
             throw new RuntimeException("No result code yet for payment {$payment->id}; retrying.");
         }
         $code = (int) $code;
-        $status = $code === 0 ? 'paid' : (self::FINAL_FAILURES[$code] ?? null);
-        if ($status === null) {
-            throw new RuntimeException("Result code {$code} for payment {$payment->id} is not a known final answer; retrying.");
+        $status = match ($code) {
+            0 => 'paid',
+            self::CANCELLED => 'cancelled',
+            default => 'needs_review',
+        };
+        if ($status === 'needs_review') {
+            Log::error('M-Pesa payment needs review: undocumented result code', ['payment' => $payment->id, 'result_code' => $code]);
         }
 
         Payment::whereKey($payment->id)->where('status', 'pending')->update([

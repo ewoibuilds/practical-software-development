@@ -5,10 +5,14 @@ namespace App\Services;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 use RuntimeException;
 
 class Mpesa
 {
+    /** Push errors that Daraja documents as "request not processed", so no prompt reached the phone (Daraja, M-Pesa Express Simulate, Error Codes). */
+    public const NO_PROMPT_ERRORS = ['500.001.1001', '500.003.02', '500.003.03'];
+
     private function setting(string $name): string
     {
         $value = (string) config("services.mpesa.{$name}");
@@ -45,7 +49,7 @@ class Mpesa
 
     private function token(): string
     {
-        return Cache::remember('mpesa.token', now()->addMinutes(50), function () {
+        return Cache::remember('mpesa.token', now()->addSeconds(3500), function () {
             return Http::withBasicAuth($this->setting('consumer_key'), $this->setting('consumer_secret'))
                 ->timeout(30)
                 ->get($this->base().'/oauth/v1/generate', ['grant_type' => 'client_credentials'])
@@ -95,12 +99,31 @@ class Mpesa
         if ($response->successful()) {
             return is_string($response->json('ResponseCode')) && $response->json('ResponseCode') !== '0';
         }
+        $errorCode = $response->json('errorCode');
 
-        return $response->clientError() && filled($response->json('errorCode'));
+        return is_string($errorCode) && ($response->clientError() || in_array($errorCode, self::NO_PROMPT_ERRORS, true));
     }
 
-    public function stkPush(string $phone, int $amount, string $reference): Response
+    public function refusalMessage(Response $response): string
     {
+        return match ($response->json('errorCode')) {
+            '500.003.02', '500.003.03' => 'M-Pesa is busy right now. Nothing was charged; please try again in a few minutes.',
+            '500.001.1001' => str_contains((string) $response->json('errorMessage'), 'lock subscriber')
+                ? 'A payment prompt is already open on this phone. Nothing was charged; wait one minute, then try again.'
+                : 'The payment could not be started. Nothing was charged.',
+            default => 'The payment could not be started. Nothing was charged; you can try again.',
+        };
+    }
+
+    public function stkPush(string $phone, int $amount, string $reference, string $description = 'Payment'): Response
+    {
+        if ($amount < 1 || $amount > 250000) {
+            throw new InvalidArgumentException('Amount must be from 1 to 250,000 shillings.');
+        }
+        if ($reference === '' || strlen($reference) > 12 || $description === '' || strlen($description) > 13) {
+            throw new InvalidArgumentException('AccountReference must be 1 to 12 characters and TransactionDesc 1 to 13.');
+        }
+
         [$timestamp, $password] = $this->password();
 
         return $this->post('/mpesa/stkpush/v1/processrequest', [
@@ -113,8 +136,8 @@ class Mpesa
             'PartyB' => $this->setting('shortcode'),
             'PhoneNumber' => $phone,
             'CallBackURL' => $this->callbackUrl(),
-            'AccountReference' => substr($reference, 0, 12),
-            'TransactionDesc' => 'Payment',
+            'AccountReference' => $reference,
+            'TransactionDesc' => $description,
         ]);
     }
 

@@ -59,7 +59,7 @@ Route::post('/payments', function (Request $request, Mpesa $mpesa) {
     RateLimiter::hit($phoneKey, 600);
 
     try {
-        $response = $mpesa->stkPush($phone, $payment->amount, 'ORDER'.$payment->id);
+        $response = $mpesa->stkPush($phone, $payment->amount, 'PAY'.$payment->id);
     } catch (ConnectionException) {
         $response = null;
     }
@@ -79,7 +79,7 @@ Route::post('/payments', function (Request $request, Mpesa $mpesa) {
             'result_desc' => mb_substr((string) ($response->json('errorMessage') ?? $response->json('ResponseDescription')), 0, 255),
         ]);
 
-        return response()->json(['message' => 'The payment could not be started. You can try again.'], 502);
+        return response()->json(['message' => $mpesa->refusalMessage($response)], 502);
     }
 
     // No clear answer: the prompt may have been sent, so the payment stays pending for a person to check.
@@ -117,13 +117,13 @@ Route::post('/payments/result/{token}', function (Request $request, Mpesa $mpesa
         }
 
         if ($payment->status !== 'pending') {
-            Payment::whereKey($payment->id)->whereIn('status', ['failed', 'cancelled'])->update(['status' => 'needs_review', 'reported_receipt' => $receipt, 'result_desc' => 'Success reported for a closed payment: check manually']);
+            Payment::whereKey($payment->id)->whereIn('status', ['failed', 'cancelled', 'needs_review'])->update(array_filter(['status' => 'needs_review', 'reported_receipt' => $receipt, 'result_desc' => 'Success reported for a closed payment: check manually']));
             Log::error('M-Pesa payment needs review: success reported for a closed payment', ['payment' => $payment->id]);
 
             return $ack;
         }
 
-        if ((int) $items->get('Amount') !== $payment->amount) {
+        if ((float) $items->get('Amount') !== (float) $payment->amount) {
             Payment::whereKey($payment->id)->where('status', 'pending')->update(['status' => 'needs_review', 'reported_receipt' => $receipt, 'result_desc' => 'Amount mismatch: check manually']);
             Log::error('M-Pesa payment needs review: amount mismatch', ['payment' => $payment->id]);
 

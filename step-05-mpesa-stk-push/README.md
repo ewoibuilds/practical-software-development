@@ -6,9 +6,9 @@ Tutorial: **Accept M-Pesa payments in Laravel** (on ewoibuilds.com: `/lessons/mp
 
 ## What this step adds
 
-`POST /api/payments` asks Safaricom's Daraja API (sandbox) to send an M-Pesa Express (STK Push) prompt. It is a **demo**: it takes the amount from the request and has no sign in, which a real shop must never do (the checkout project fixes both). It is rate limited: 10 requests a minute per address, and 3 prompts per phone every 10 minutes, counted only for valid requests. It checks the result token and gets an access token before saving anything (503 if either fails). Only a clear refusal from Daraja marks the payment failed; a server error or no answer leaves it pending (504).
+`POST /api/payments` asks Safaricom's Daraja API (sandbox) to send an M-Pesa Express (STK Push) prompt. It is a **demo**: it takes the amount from the request and has no sign in, which a real shop must never do (the checkout project fixes both). It is rate limited: 10 requests a minute per address, and 3 prompts per phone every 10 minutes, counted only for valid requests. It checks the result token and gets an access token before saving anything (503 if either fails). Only a clear refusal documented by Daraja marks the payment failed: a `ResponseCode` other than "0", a 4xx with an `errorCode`, or `500.001.1001` (for example "Unable to lock subscriber": wait one minute), `500.003.02` (busy) or `500.003.03` (quota). Any other 500, an unreadable answer or no answer leaves it pending (504). Amounts must be 1 to 250,000, `AccountReference` at most 12 and `TransactionDesc` at most 13 characters, and the access token is reused for 3500 seconds (tokens expire after 3600). Sources: Daraja, M-Pesa Express Simulate and Authorization, developer.safaricom.co.ke.
 
-`POST /api/payments/result/{token}` receives the result. It checks the secret token and the body shape, and always answers `{"ResultCode":0}`. Every result, success or failure, goes through `ConfirmMpesaPayment`, which asks Daraja's status query. Only code 0 or a short allow-list of final failures (1, 1019, 1025, 1032, 1037, 2001, 9999) settles the payment; any other or missing code retries. A wrong amount, or a success for a failed payment, goes to `needs_review`.
+`POST /api/payments/result/{token}` receives the result. It checks the secret token and the body shape, and always answers `{"ResultCode":0}`. Every result, success or failure, goes through `ConfirmMpesaPayment`, which asks Daraja's status query. Code 0 marks it paid and 1032 ("Request cancelled by user") cancelled, the only two codes Safaricom documents (Daraja, M-Pesa Express Query and Simulate, developer.safaricom.co.ke). Any other code goes to `needs_review`, and a missing code retries. A wrong amount, or a success for a closed payment, also goes to `needs_review`.
 
 ## The files
 
@@ -22,7 +22,7 @@ step-05-mpesa-stk-push/
 ├── app/Jobs/ConfirmMpesaPayment.php
 ├── database/migrations/2026_01_02_000000_create_payments_table.php
 ├── routes/api.php                                     step 03's routes plus payments and the callback
-└── tests/Feature/MpesaPaymentTest.php                 24 tests, all with Http::fake
+└── tests/Feature/MpesaPaymentTest.php                 29 tests, all with Http::fake
 ```
 
 Compare or copy these files into your app. The lessons migration and model from step 03 must already be there.

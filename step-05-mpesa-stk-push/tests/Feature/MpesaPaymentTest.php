@@ -8,7 +8,6 @@ use App\Services\Mpesa;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use RuntimeException;
@@ -257,14 +256,83 @@ class MpesaPaymentTest extends TestCase
         $this->assertSame('cancelled', Payment::sole()->status);
     }
 
-    public function test_an_expired_prompt_is_a_final_failure(): void
+    public function test_an_undocumented_result_code_goes_to_review_never_to_failed(): void
     {
-        $this->fakeDaraja(['*/mpesa/stkpushquery/v1/query' => Http::response(['ResponseCode' => '0', 'ResultCode' => '1019', 'ResultDesc' => 'Transaction has expired'])]);
+        $this->fakeDaraja(['*/mpesa/stkpushquery/v1/query' => Http::response(['ResponseCode' => '0', 'ResultCode' => '1037', 'ResultDesc' => 'No response from user'])]);
         $this->startPayment();
 
-        $this->sendResult(resultCode: 1019)->assertOk();
+        $this->sendResult(resultCode: 1037)->assertOk();
+
+        $this->assertSame('needs_review', Payment::sole()->status);
+        $this->assertSame(1037, Payment::sole()->result_code);
+    }
+
+    public function test_a_success_for_a_payment_in_review_keeps_the_reported_receipt(): void
+    {
+        $this->fakeDaraja(['*/mpesa/stkpushquery/v1/query' => Http::response(['ResponseCode' => '0', 'ResultCode' => '4999', 'ResultDesc' => 'Still processing'])]);
+        $this->startPayment();
+        $this->sendResult(resultCode: 4999)->assertOk();
+        $this->assertSame('needs_review', Payment::sole()->status);
+
+        $this->sendResult()->assertOk();
+
+        $this->assertSame('needs_review', Payment::sole()->status);
+        $this->assertSame('TEST1234AB', Payment::sole()->reported_receipt);
+    }
+
+    public function test_an_open_session_on_the_phone_is_a_clear_refusal_with_wait_advice(): void
+    {
+        $this->fakeDaraja(['*/mpesa/stkpush/v1/processrequest' => Http::response(['errorCode' => '500.001.1001', 'errorMessage' => 'Unable to lock subscriber, a transaction is already in process for the current subscriber'], 500)]);
+
+        $this->startPayment()->assertStatus(502)->assertJsonFragment(['message' => 'A payment prompt is already open on this phone. Nothing was charged; wait one minute, then try again.']);
 
         $this->assertSame('failed', Payment::sole()->status);
+    }
+
+    public function test_a_busy_system_is_a_clear_refusal(): void
+    {
+        $this->fakeDaraja(['*/mpesa/stkpush/v1/processrequest' => Http::response(['errorCode' => '500.003.02', 'errorMessage' => 'System is busy. Please try again in few minutes.'], 500)]);
+
+        $this->startPayment()->assertStatus(502)->assertJsonFragment(['message' => 'M-Pesa is busy right now. Nothing was charged; please try again in a few minutes.']);
+
+        $this->assertSame('failed', Payment::sole()->status);
+    }
+
+    public function test_an_internal_error_is_an_unknown_outcome(): void
+    {
+        $this->fakeDaraja(['*/mpesa/stkpush/v1/processrequest' => Http::response(['errorCode' => '500.003.1001', 'errorMessage' => 'Internal Server Error'], 500)]);
+
+        $this->startPayment()->assertStatus(504);
+
+        $this->assertSame('pending', Payment::sole()->status);
+    }
+
+    public function test_account_reference_and_description_lengths_are_checked_before_sending(): void
+    {
+        $this->fakeDaraja();
+
+        foreach ([['ORDER1234567X', 'Payment'], ['ORDER1', 'Payment for it'], ['', 'Payment']] as [$reference, $description]) {
+            try {
+                app(Mpesa::class)->stkPush('254708374149', 1, $reference, $description);
+                $this->fail('A reference over 12 or a description over 13 characters must be refused.');
+            } catch (\InvalidArgumentException) {
+            }
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_the_access_token_is_reused_for_under_an_hour(): void
+    {
+        $this->fakeDaraja(['*/mpesa/stkpush/v1/processrequest' => fn () => Http::response(['MerchantRequestID' => 'm-1', 'CheckoutRequestID' => 'ws_CO_'.Str::random(10), 'ResponseCode' => '0'])]);
+
+        $this->startPayment()->assertStatus(202);
+        $this->travel(3400)->seconds();
+        $this->startPayment()->assertStatus(202);
+        $this->travel(200)->seconds();
+        $this->startPayment()->assertStatus(202);
+
+        Http::assertSentCount(5);
     }
 
     public function test_a_forged_cancel_cannot_close_a_payment_that_was_paid(): void
@@ -275,24 +343,6 @@ class MpesaPaymentTest extends TestCase
         $this->sendResult(resultCode: 1032)->assertOk();
 
         $this->assertSame('paid', Payment::sole()->status);
-    }
-
-    public function test_an_unknown_result_code_keeps_the_payment_pending_and_retries(): void
-    {
-        $this->fakeDaraja(['*/mpesa/stkpushquery/v1/query' => Http::response(['ResponseCode' => '0', 'ResultCode' => '4999', 'ResultDesc' => 'The transaction is still under processing'])]);
-        $this->startPayment();
-        Queue::fake();
-
-        $this->sendResult(resultCode: 1032)->assertOk();
-        Queue::assertPushed(ConfirmMpesaPayment::class);
-
-        try {
-            (new ConfirmMpesaPayment(Payment::sole()->id))->handle(app(Mpesa::class));
-            $this->fail('An unknown result code must make the job retry.');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('not a known final answer', $e->getMessage());
-        }
-        $this->assertSame('pending', Payment::sole()->status);
     }
 
     public function test_a_missing_result_code_keeps_the_payment_pending(): void
