@@ -1,6 +1,6 @@
 # Step 04: Hash passwords properly
 
-Lesson: **Hash passwords properly** (on ewoibuilds.com: `/lessons/hash-passwords-properly`)
+Lesson: [Hash passwords properly](https://ewoibuilds.com/lessons/hash-passwords-properly)
 
 This lesson is shared with the Secure web development path, so its code lives in one place:
 

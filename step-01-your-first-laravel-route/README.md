@@ -1,6 +1,6 @@
 # Step 01: Your first Laravel route
 
-Lesson: **Your first Laravel route** (on ewoibuilds.com: `/lessons/your-first-laravel-route`)
+Lesson: [Your first Laravel route](https://ewoibuilds.com/lessons/your-first-laravel-route)
 
 **Your workspace folder:** `~/ewoi-learning/laravel-app` (created in the lesson with `composer create-project laravel/laravel laravel-app`, Laravel 13).
 

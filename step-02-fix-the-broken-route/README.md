@@ -1,6 +1,6 @@
 # Step 02: Exercise, fix the broken route
 
-Exercise: **Fix the broken route** (on ewoibuilds.com: `/exercises/fix-the-broken-route`)
+Exercise: [Fix the broken route](https://ewoibuilds.com/exercises/fix-the-broken-route)
 
 **Your workspace folder:** `~/ewoi-learning/route-exercise`, a fresh Laravel 13 app made only for this exercise (`composer create-project laravel/laravel route-exercise`). Do not use `laravel-app`: it already has an about route.
 

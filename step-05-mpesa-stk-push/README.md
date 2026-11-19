@@ -1,6 +1,6 @@
 # Step 05: Accept M-Pesa payments with STK Push
 
-Tutorial: **Accept M-Pesa payments in Laravel** (on ewoibuilds.com: `/lessons/mpesa-stk-push-laravel`)
+Tutorial: [Accept M-Pesa payments in Laravel](https://ewoibuilds.com/lessons/mpesa-stk-push-laravel)
 
 **Your workspace folder:** `~/ewoi-learning/laravel-app` (the same app, Laravel 13, with step 03 in place).
 

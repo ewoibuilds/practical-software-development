@@ -24,11 +24,11 @@ Do the lessons in this order. Each step folder holds the files that lesson creat
 
 | Step | Folder | Lesson |
 |---|---|---|
-| 01 | [`step-01-your-first-laravel-route`](step-01-your-first-laravel-route) | **Your first Laravel route** (on ewoibuilds.com: `/lessons/your-first-laravel-route`) |
-| 02 | [`step-02-fix-the-broken-route`](step-02-fix-the-broken-route) | **Exercise: fix the broken route** (on ewoibuilds.com: `/exercises/fix-the-broken-route`) |
-| 03 | [`step-03-build-a-rest-api`](step-03-build-a-rest-api) | **Build a REST API** (on ewoibuilds.com: `/lessons/build-a-rest-api`) |
-| 04 | [`step-04-hash-passwords-properly`](step-04-hash-passwords-properly) | **Hash passwords properly** (on ewoibuilds.com: `/lessons/hash-passwords-properly`) |
-| 05 | [`step-05-mpesa-stk-push`](step-05-mpesa-stk-push) | **Accept M-Pesa payments in Laravel** (on ewoibuilds.com: `/lessons/mpesa-stk-push-laravel`) |
+| 01 | [`step-01-your-first-laravel-route`](step-01-your-first-laravel-route) | [Your first Laravel route](https://ewoibuilds.com/lessons/your-first-laravel-route) |
+| 02 | [`step-02-fix-the-broken-route`](step-02-fix-the-broken-route) | [Exercise: fix the broken route](https://ewoibuilds.com/exercises/fix-the-broken-route) |
+| 03 | [`step-03-build-a-rest-api`](step-03-build-a-rest-api) | [Build a REST API](https://ewoibuilds.com/lessons/build-a-rest-api) |
+| 04 | [`step-04-hash-passwords-properly`](step-04-hash-passwords-properly) | [Hash passwords properly](https://ewoibuilds.com/lessons/hash-passwords-properly) |
+| 05 | [`step-05-mpesa-stk-push`](step-05-mpesa-stk-push) | [Accept M-Pesa payments in Laravel](https://ewoibuilds.com/lessons/mpesa-stk-push-laravel) |
 
 Then build the path's projects: [task-tracker-laravel](https://github.com/ewoibuilds/task-tracker-laravel) and [mpesa-checkout-api](https://github.com/ewoibuilds/mpesa-checkout-api).
 

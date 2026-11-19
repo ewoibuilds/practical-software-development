@@ -1,6 +1,6 @@
 # Step 03: Build a REST API
 
-Lesson: **Build a REST API** (on ewoibuilds.com: `/lessons/build-a-rest-api`)
+Lesson: [Build a REST API](https://ewoibuilds.com/lessons/build-a-rest-api)
 
 **Your workspace folder:** `~/ewoi-learning/laravel-app` (the same app as step 01, Laravel 13).
 
